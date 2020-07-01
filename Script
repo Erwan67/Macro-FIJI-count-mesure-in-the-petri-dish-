@@ -1,0 +1,123 @@
+// Original code by Vytas Bindokas; Oct 2006, Univ. of Chicago
+// https://digital.bsd.uchicago.edu/docs/imagej_macros/_graybalancetoROI.txt
+// This macro white balances RGB to a selected region (equal R,G,B =gray)
+//    draw a region prior to running the macro
+
+// Code modified by Patrice Mascalchi, 2014, Univ. of Cambridge UK
+// Ask for region to be drawn / Check region existence / check RGB at start / compaction of code (loop)
+
+
+myfolder = getDirectory("Choose image folder");
+fileList = getFileList(myfolder); 
+mySaveFolder = getDirectory("Select the destination folder");
+// initit
+run("Set Measurements...", "area mean add redirect=None decimal=3");
+roiManager("reset");
+run("Clear Results");
+run("Colors...", "foreground=white background=white selection=red");
+
+
+
+
+for (f=0; f<fileList.length; f++){
+	open(myfolder + fileList[f]);
+	setTool(0);
+	waitForUser("Draw a region over background");
+	run("Set Measurements...", "  mean redirect=None decimal=3");
+		if (selectionType==-1) exit("you must draw a region first");
+			ti = getTitle;
+			run("Select None");
+			//setBatchMode(true);
+			run("Duplicate...", "title=rgbstk-temp");
+			origBit = bitDepth;
+		if (bitDepth() != 24) exit("Active image is not RGB");
+			run("RGB Stack");
+			run("Restore Selection");
+			val = newArray(3);
+		for (s=1;s<=3;s++) {
+			setSlice(s);
+			run("Measure");
+			val[s-1] = getResult("Mean");
+			}
+	run("Select None");
+	run("16-bit");
+	run("32-bit");
+	Array.getStatistics(val, min, max, mean);
+
+		for (s=1; s<=3; s++) {
+			setSlice(s);
+			dR = val[s-1] - mean;
+			if (dR < 0) {
+				run("Add...", "slice value="+ abs(dR));
+				} 
+			else if (dR > 0) {
+				run("Subtract...", "slice value="+ abs(dR));
+				}
+			}
+
+	run("16-bit");
+	run("Convert Stack to RGB");
+	rename(ti + "-corrected");
+	//closeWin("Results");
+	closeWin("rgbstk-temp");
+	setBatchMode("exit and display");
+	run("Tile");			// Can be removed
+
+	// ------------------------------------------------------------------------------------------
+	// close any window without returning any error
+	function closeWin(name) {
+		if (isOpen(name)) {
+	    	selectWindow(name);
+	    	run("Close");
+			}
+		}
+	selectWindow(ti);
+	close();
+
+	//setTool("oval");
+	selectWindow(ti + "-corrected");
+	makeOval(1074, 570, 2394, 2238);
+	title=getTitle();
+	waitForUser("centre le cercle autour du puit");
+	run("Duplicate...","title=["+ title+"]");
+	selectWindow(ti + "-corrected");
+	close();
+	waitForUser("Adapte le cercle autour du puit");
+	run("Clear Outside");
+	run("Duplicate...");
+	title=getTitle();
+	roiManager("reset");
+	run("Duplicate...","8bits");
+	run("Select None");
+	saveAs("TIFF", mySaveFolder+title);
+	run("8-bit");
+	run("Gaussian Blur...", "sigma=5");
+	run("Select None");
+	//setAutoThreshold("Default");
+	run("Threshold...");
+	setThreshold(70, 210);
+	waitForUser("Adapte le seuillage");
+	setOption("BlackBackground", true);
+	run("Convert to Mask");
+	run("Watershed");
+	run("Analyze Particles...", "size=100-25000 summarize add");
+	selectWindow(title);
+	roiManager("add");
+	roiManager("show all");
+	run("Flatten");
+	saveAs("TIFF", mySaveFolder+title+"_mask");
+	selectWindow(title);
+	n=roiManager("count");
+		for (i = 0; i < n; i++) {
+			roiManager("select", i);
+			roiManager("measure");
+			}
+	saveAs("Results", mySaveFolder+ title+"_Results.csv");
+	selectWindow("Results"); 
+    run("Close");
+	run("Close All");
+	roiManager("reset");
+	}
+mySaveFolder = getDirectory("Select the destination folder");
+Table.rename("Summary", "Results");	
+saveAs("Results", mySaveFolder+"Count_Results.csv");
